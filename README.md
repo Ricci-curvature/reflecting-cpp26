@@ -79,6 +79,8 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 - **07** — [policy layer](https://github.com/Ricci-curvature/reflecting-cpp26/blob/e98d973/stages/07_policy_layer.cpp)
 - **08** — [header-only](https://github.com/Ricci-curvature/reflecting-cpp26/blob/efde80c/stages/08_header_only.cpp)
 
+*Heads-up: these pinned snapshots predate the comment translation — stages 1–7 still show the original Korean. Current state in [`755c15d`](https://github.com/Ricci-curvature/reflecting-cpp26/commit/755c15d) is English.*
+
 ## Walkthrough
 
 [**A Declarative Validator in C++26**](https://riccilab.dev/blog/A-Declarative-Validator-in-C++26) walks all eight stages in order, with the errors that showed up along the way and the clang-p2996 quirks that shaped the final design.
