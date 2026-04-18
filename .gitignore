@@ -12,6 +12,7 @@ blog/
 *.o
 *.obj
 *.exe
+*.out
 a.out
 .vscode/
 .idea/
