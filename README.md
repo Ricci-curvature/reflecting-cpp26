@@ -66,7 +66,18 @@ clang++ -std=c++26 -freflection-latest -stdlib=libc++ \
 # smoke test: OK
 ```
 
-The `stages/` directory holds the tutorial timeline — one `.cpp` per step from "hello reflection" to "header-only release". Each file is self-contained and matches a commit in the history.
+## Stages
+
+The repo is organised as a staged build log. Every stage is a single self-contained `.cpp` file, pinned to the commit where it was first checked in — so each link is the file *as it existed when that step was the head of the project*, not after later polish.
+
+- **01** — [hello reflection](https://github.com/Ricci-curvature/reflecting-cpp26/blob/8f1011f/stages/01_hello_reflection.cpp)
+- **02** — [annotation reading](https://github.com/Ricci-curvature/reflecting-cpp26/blob/2eed156/stages/02_annotation_reading.cpp)
+- **03** — [first validator](https://github.com/Ricci-curvature/reflecting-cpp26/blob/070c662/stages/03_first_validator.cpp)
+- **04** — [validation context](https://github.com/Ricci-curvature/reflecting-cpp26/blob/36d60f2/stages/04_validation_context.cpp)
+- **05** — [string annotations](https://github.com/Ricci-curvature/reflecting-cpp26/blob/32d79f3/stages/05_string_annotations.cpp)
+- **06** — [nested structs](https://github.com/Ricci-curvature/reflecting-cpp26/blob/afe66a0/stages/06_nested_structs.cpp)
+- **07** — [policy layer](https://github.com/Ricci-curvature/reflecting-cpp26/blob/e98d973/stages/07_policy_layer.cpp)
+- **08** — [header-only](https://github.com/Ricci-curvature/reflecting-cpp26/blob/efde80c/stages/08_header_only.cpp)
 
 ## Walkthrough
 
