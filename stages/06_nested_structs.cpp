@@ -1,18 +1,19 @@
 // Stage 6: Nested struct recursion.
-// `User`에 `Address` 필드가 붙고, validate_impl이 class 멤버에 대해 자기 자신을
-// 재귀 호출한다. Stage 4에서 만들어둔 path_stack이 여기서 실제로 pay off —
-// `address.zip_code` 같은 dotted path가 자동으로 생성된다.
+// `User` gains an `Address` field, and validate_impl recurses into itself on
+// class members. The path_stack built back in Stage 4 finally pays off —
+// dotted paths like `address.zip_code` now fall out automatically.
 //
-// 재귀 dispatch 규칙: std::is_aggregate_v<MT>.
-//  - Address (plain struct, constructor 없음) → aggregate → 재귀한다.
-//  - std::string (constructor/private member 있음) → non-aggregate → leaf로 본다.
-//  - int 같은 scalar → class type이 아니라서 애초에 재귀 대상 아님.
+// Recursion dispatch rule: std::is_aggregate_v<MT>.
+//  - Address (plain struct, no user-declared constructors) → aggregate → recurse.
+//  - std::string (has constructors / private members) → non-aggregate → treat as a leaf.
+//  - int and other scalars → not class types, so not a recursion candidate at all.
 //
-// 대안으로 is_class_v를 썼다면 std::string까지 재귀해서 내부 멤버(_M_dataplus 등)로
-// 파고들었을 것이다. Stage 6 스코프는 "사용자 정의 plain struct만" 재귀다.
+// Using is_class_v instead would have recursed into std::string and dug into
+// internal members like _M_dataplus. Stage 6 scope is "recurse into
+// user-defined plain structs only".
 //
-// Stage 5에서 기록한 clang-p2996 quirk 대비용 `if constexpr (requires { ... })`
-// 가드는 모든 annotation 분기에 일괄 적용.
+// The `if constexpr (requires { ... })` guard added in Stage 5 for the
+// clang-p2996 quirk is applied uniformly to every annotation branch.
 
 #include <meta>
 #include <iostream>
@@ -138,8 +139,8 @@ void validate_impl(const T& obj, ValidationContext& ctx) {
             }
         }
 
-        // Recurse into aggregate (plain struct) members. std::string 등 non-aggregate는
-        // 여기서 자동으로 걸러진다.
+        // Recurse into aggregate (plain struct) members. std::string and other
+        // non-aggregate types are filtered out here automatically.
         using MT = std::remove_cvref_t<decltype(obj.[:member:])>;
         if constexpr (std::is_aggregate_v<MT>) {
             validate_impl(obj.[:member:], ctx);

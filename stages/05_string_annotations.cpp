@@ -1,16 +1,19 @@
 // Stage 5: String annotations.
 // MinLength / MaxLength (literal class with data) + NotEmpty (tag type).
-// Stage 2에서 "두 모양이 같은 파이프라인으로 흐른다"를 증명했던 게
-// 여기서 실제 validator 엔진에 합쳐진다.
-// Regex는 literal-class 제약 회피 기법이 따로라 이 스테이지에 안 넣는다.
+// What Stage 2 proved — "both annotation shapes flow through the same
+// pipeline" — lands in the real validator engine here.
+// Regex is deferred: working around the literal-class restriction needs a
+// separate technique that doesn't belong in this stage.
 //
-// clang-p2996 quirk: `template for` 안의 `if constexpr (type_of(ann) == ^^X)`
-// 분기는 reflection-dependent 조건에 대해 discard가 불안정하다. Stage 4까지는
-// 분기가 하나(Range)라서 드러나지 않았지만, Stage 5처럼 여러 분기가 생기고
-// 각 분기 바디가 멤버 타입별로 다른 expression(.size() / .empty())을 쓰면
-// int 멤버에 대해 MinLength 분기 바디가 typecheck돼서 "const int has no .size()"로
-// 터진다. 해결: 각 분기 안에 `if constexpr (requires { ... })` 가드를 한 겹
-// 더 씌운다. outer discard가 실패해도 inner requires가 잡아준다.
+// clang-p2996 quirk: inside `template for`, an `if constexpr (type_of(ann)
+// == ^^X)` branch discards unreliably on reflection-dependent conditions.
+// Through Stage 4 there was only one branch (Range), so the bug stayed
+// hidden. Once multiple branches appear and each branch body uses a
+// different expression per member type (.size() / .empty()), the MinLength
+// branch body typechecks against an int member and fails with
+// "const int has no .size()". Fix: wrap each branch body in another
+// `if constexpr (requires { ... })` guard — even if the outer discard
+// leaks, the inner requires catches it.
 
 #include <meta>
 #include <iostream>

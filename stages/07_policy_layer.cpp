@@ -1,13 +1,14 @@
 // Stage 7: Policy layer.
-// 코어(validate_impl)는 여전히 수집 기반. 정책 3종과 FailFast 모드만 얹는다.
+// The core (validate_impl) stays collection-based. The three policies and
+// the FailFast mode are layered on top:
 //   - collect(obj, mode)  → std::vector<ValidationError>
 //   - check(obj, mode)    → std::expected<void, std::vector<ValidationError>>
-//   - validate(obj, mode) → void, 실패 시 ValidationException throw
-// Fail-fast는 정책 레이어가 아니라 ValidationContext.mode가 결정한다.
-// validate_impl 본체는 Stage 6에서 바뀐 게 없고, 각 iteration 진입 앞에
-// `if (!ctx.should_stop())` 런타임 가드 한 줄씩만 삽입한다.
-// 이 분리가 깨지면 코어가 세 정책 각각의 제어 흐름을 알아야 한다 — 그걸 피하는 게
-// Stage 3부터 의도한 구조다.
+//   - validate(obj, mode) → void, throws ValidationException on failure
+// Fail-fast is driven by ValidationContext.mode, not by the policy layer.
+// The body of validate_impl is unchanged from Stage 6 — each iteration just
+// gets a one-line `if (!ctx.should_stop())` runtime guard in front.
+// Breaking this separation would force the core to know the control flow of
+// each policy — avoiding that has been the intended structure since Stage 3.
 
 #include <meta>
 #include <iostream>

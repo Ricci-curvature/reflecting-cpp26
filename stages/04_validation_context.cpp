@@ -1,8 +1,9 @@
 // Stage 4: Collection-based core with structured errors + path tracking.
 //
-// Stage 3의 ++failures 자리가 ctx.errors.push_back(...)로 치환됐고, 제어 흐름은
-// 그대로다. path_stack push/pop으로 "어느 필드에서 에러가 났는지"를 저장한다.
-// 중첩 struct 재귀는 Stage 6 스코프 — 여기선 flat struct만.
+// The ++failures line from Stage 3 is swapped for ctx.errors.push_back(...),
+// and the control flow is unchanged. path_stack push/pop records "which field
+// produced the error". Nested-struct recursion is Stage 6 scope — flat structs
+// only here.
 
 #include <meta>
 #include <iostream>
@@ -88,7 +89,7 @@ bool validate(const T& obj) {
     return collect(obj).empty();
 }
 
-// 드라이버 쪽 포맷 헬퍼. 설계 문서 스펙: <path>: <message> (<annotation>)
+// Driver-side format helper. Spec from the design doc: <path>: <message> (<annotation>)
 std::string format_error(const ValidationError& e) {
     return std::format("{}: {} ({})", e.path, e.message, e.annotation);
 }

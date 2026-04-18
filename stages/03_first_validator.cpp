@@ -1,7 +1,7 @@
 // Stage 3: First validator.
-// Public API는 bool. 내부는 이미 수집 기반 (++failures, early return 없음).
-// Stage 4에서 ++failures 자리가 errors.push_back(...)로 바뀌어도
-// 제어 흐름은 그대로 유지되도록 의도한 구조.
+// Public API is bool. Internally already collection-based (++failures, no
+// early return). The shape is intentional: in Stage 4, the ++failures line
+// gets swapped for errors.push_back(...) and the control flow stays identical.
 
 #include <meta>
 #include <iostream>
@@ -15,7 +15,7 @@ struct Range {
 struct User {
     [[=Range{0, 150}]] int age;
     [[=Range{1, 1'000'000}]] int id;
-    int unrelated;  // annotation 없는 필드 — 실패에 기여 안 함
+    int unrelated;  // no annotation — does not contribute to failures
 };
 
 namespace detail {
@@ -38,7 +38,7 @@ constexpr std::size_t validate_impl(const T& obj) {
                 auto v = obj.[:member:];
                 if (v < r.min || v > r.max) {
                     ++failures;
-                    // early return 하지 않음 — 수집 철학 유지.
+                    // no early return — stay faithful to the collect-all philosophy.
                 }
             }
         }
@@ -56,8 +56,8 @@ constexpr bool validate(const T& obj) {
 
 int main() {
     User good{30, 42, 999};
-    User one_fail{200, 42, 999};   // age 범위 초과
-    User two_fail{200, -1, 999};   // age + id 둘 다 범위 밖
+    User one_fail{200, 42, 999};   // age out of range
+    User two_fail{200, -1, 999};   // both age and id out of range
 
     std::cout << std::boolalpha;
     std::cout << "good:     validate=" << validate(good)

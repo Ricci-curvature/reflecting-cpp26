@@ -1,7 +1,7 @@
-// Stage 2: Annotation 읽기.
-// 두 가지 모양(멤버 있는 literal class / 빈 태그 타입)의 annotation이
-// 같은 파이프라인으로 처리되는지, 그리고 annotation 없는 필드가
-// 빈 range로 스킵되는지 확인.
+// Stage 2: Reading annotations.
+// Verify that both annotation shapes (literal class with members / empty tag
+// type) flow through the same pipeline, and that a field with no annotations
+// is silently skipped via the empty annotations_of range.
 
 #include <meta>
 #include <iostream>

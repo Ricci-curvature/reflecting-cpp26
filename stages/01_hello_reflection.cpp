@@ -1,6 +1,6 @@
 // Stage 1: Hello reflection.
-// Annotation 없이, struct의 nonstatic data member 이름만 출력.
-// 환경과 리플렉션 파이프라인이 살아있는지 확인하는 목적.
+// No annotations yet — just print the nonstatic data member names of a struct.
+// Purpose: sanity-check that the toolchain and reflection pipeline are alive.
 
 #include <meta>
 #include <iostream>
