@@ -92,6 +92,7 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 
 - [**A Declarative Validator in C++26**](https://riccilab.dev/blog/A-Declarative-Validator-in-C++26) walks stages 1–8, with the errors that showed up along the way and the clang-p2996 quirks that shaped the final design.
 - [**Caching Regex with C++26 Reflection**](https://riccilab.dev/blog/Caching-Regex-with-C++26-Reflection) covers stages 9–12: adding a `Regex<N>` annotation, measuring the naive rebuild cost, and comparing a function-local static cache against a template-parameter cache keyed on `std::meta::info` as an NTTP.
+- [**Validating Containers with C++26 Reflection**](https://riccilab.dev/blog/Validating-Containers-with-C++26-Reflection) covers stages 13–15: extending the walker past `is_aggregate_v` to recurse into `std::optional<T>` and `std::vector<T>`, switching the path stack to `std::variant<std::string, std::size_t>` so indices render as `[N]`, and adding container-level `MinSize` / `MaxSize` annotations.
 
 ## Scope
 
