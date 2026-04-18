@@ -2,12 +2,16 @@
 // Bloomberg clang-p2996 fork required (-std=c++26 -freflection-latest).
 //
 // Public API (namespace av):
-//   - Annotation types: Range, MinLength, MaxLength, NotEmpty
-//   - ValidationError, ValidationContext, ValidationException, Mode
-//   - collect(obj, mode)  → std::vector<ValidationError>
-//   - check(obj, mode)    → std::expected<void, std::vector<ValidationError>>
-//   - validate(obj, mode) → void, throws ValidationException on failure
-//   - format_error(err)   → "<path>: <message> (<annotation>)"
+//   - Annotation types : Range, MinLength, MaxLength, NotEmpty
+//   - Error types      : ValidationError, ValidationException
+//   - Mode enum        : Mode::CollectAll, Mode::FailFast
+//   - Policy functions : collect(obj, mode)  → std::vector<ValidationError>
+//                        check(obj, mode)    → std::expected<void, vector<ValidationError>>
+//                        validate(obj, mode) → void, throws ValidationException on failure
+//   - Helper           : format_error(err)   → "<path>: <message> (<annotation>)"
+//
+// Internal (namespace av::detail, not stable, not user-facing):
+//   - ValidationContext, validate_impl<T>
 //
 // ODR: all non-template free functions are inline; class member functions are
 // defined in-class (implicitly inline); templates are implicitly inline. Safe
@@ -47,7 +51,7 @@ struct MaxLength {
 
 struct NotEmpty {};
 
-// ---- Error + context ----
+// ---- Error + mode (public) ----
 
 struct ValidationError {
     std::string path;
@@ -56,6 +60,24 @@ struct ValidationError {
 };
 
 enum class Mode { CollectAll, FailFast };
+
+class ValidationException : public std::exception {
+public:
+    std::vector<ValidationError> errors;
+
+    explicit ValidationException(std::vector<ValidationError> e)
+        : errors(std::move(e)),
+          message_(std::format("validation failed with {} error(s)", errors.size())) {}
+
+    const char* what() const noexcept override { return message_.c_str(); }
+
+private:
+    std::string message_;
+};
+
+// ---- Core engine (internal) ----
+
+namespace detail {
 
 struct ValidationContext {
     std::vector<ValidationError> errors;
@@ -75,24 +97,6 @@ struct ValidationContext {
         return result;
     }
 };
-
-class ValidationException : public std::exception {
-public:
-    std::vector<ValidationError> errors;
-
-    explicit ValidationException(std::vector<ValidationError> e)
-        : errors(std::move(e)),
-          message_(std::format("validation failed with {} error(s)", errors.size())) {}
-
-    const char* what() const noexcept override { return message_.c_str(); }
-
-private:
-    std::string message_;
-};
-
-// ---- Core engine ----
-
-namespace detail {
 
 template <typename T>
 void validate_impl(const T& obj, ValidationContext& ctx) {
@@ -179,7 +183,7 @@ void validate_impl(const T& obj, ValidationContext& ctx) {
 
 template <typename T>
 std::vector<ValidationError> collect(const T& obj, Mode mode = Mode::CollectAll) {
-    ValidationContext ctx;
+    detail::ValidationContext ctx;
     ctx.mode = mode;
     detail::validate_impl(obj, ctx);
     return std::move(ctx.errors);
