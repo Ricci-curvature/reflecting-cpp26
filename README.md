@@ -85,6 +85,7 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 - **13** — [`std::optional<T>` recursion + `NotNullopt`](https://github.com/Ricci-curvature/reflecting-cpp26/blob/48bc245/stages/13_optional_field.cpp)
 - **14** — [`std::vector<T>` recursion + `path_stack` variant](https://github.com/Ricci-curvature/reflecting-cpp26/blob/4cf6353/stages/14_vector_field.cpp)
 - **15** — [container-level `MinSize` / `MaxSize`](https://github.com/Ricci-curvature/reflecting-cpp26/blob/3a64156/stages/15_container_annotations.cpp)
+- **16** — [custom predicate annotations via `Predicate<F>` wrapper](https://github.com/Ricci-curvature/reflecting-cpp26/blob/02cc12c/stages/16_custom_predicates.cpp)
 
 *Heads-up: pinned snapshots 1–7 predate the comment translation and still show the original Korean. Current state in [`755c15d`](https://github.com/Ricci-curvature/reflecting-cpp26/commit/755c15d) is English.*
 
@@ -93,6 +94,7 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 - [**A Declarative Validator in C++26**](https://riccilab.dev/blog/A-Declarative-Validator-in-C++26) walks stages 1–8, with the errors that showed up along the way and the clang-p2996 quirks that shaped the final design.
 - [**Caching Regex with C++26 Reflection**](https://riccilab.dev/blog/Caching-Regex-with-C++26-Reflection) covers stages 9–12: adding a `Regex<N>` annotation, measuring the naive rebuild cost, and comparing a function-local static cache against a template-parameter cache keyed on `std::meta::info` as an NTTP.
 - [**Validating Containers with C++26 Reflection**](https://riccilab.dev/blog/Validating-Containers-with-C++26-Reflection) covers stages 13–15: extending the walker past `is_aggregate_v` to recurse into `std::optional<T>` and `std::vector<T>`, switching the path stack to `std::variant<std::string, std::size_t>` so indices render as `[N]`, and adding container-level `MinSize` / `MaxSize` annotations.
+- [**Opening a Closed Annotation Set with Structural Lambdas**](https://riccilab.dev/blog/Opening-a-Closed-Annotation-Set-with-Structural-Lambdas) covers stage 16: opening the closed-set dispatch with one `Predicate<F>` wrapper branch, confirming captureless lambda closures work as structural NTTPs, isolating the structural-type rule that rejects capturing closures, and contrasting per-site closure-type identity against stage 12's value-NTTP fold.
 
 ## Scope
 
