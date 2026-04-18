@@ -81,7 +81,7 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 
 ## Walkthrough
 
-[`blog/02-tutorial-building-validator.md`](blog/02-tutorial-building-validator.md) walks all eight stages in order, with the errors that showed up along the way and the clang-p2996 quirks that shaped the final design.
+[**A Declarative Validator in C++26**](https://riccilab.dev/blog/A-Declarative-Validator-in-C++26) walks all eight stages in order, with the errors that showed up along the way and the clang-p2996 quirks that shaped the final design.
 
 ## Scope
 
