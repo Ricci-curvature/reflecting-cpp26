@@ -1,0 +1,17 @@
+# Project meta/docs — excluded from git per project policy.
+# Only the C++26 library code and supporting scripts are tracked.
+C++26 Annotation-Based Validator.md
+CLAUDE.md
+claude.md
+blog/
+
+# Claude Code local state
+.claude/
+
+# Build / editor noise
+*.o
+*.obj
+*.exe
+a.out
+.vscode/
+.idea/

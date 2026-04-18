@@ -1,0 +1,39 @@
+#!/bin/bash
+# tools/cxx — compile a single C++26 reflection source with clang-p2996 + libc++ and run it.
+#
+# Usage (from inside WSL, at project root):
+#   ./tools/cxx stages/01_hello_reflection.cpp
+#
+# Prints compile diagnostics (if any), then program output. Exits with program's exit code.
+
+set -e
+
+if [ -z "$1" ]; then
+    echo "usage: $0 <source.cpp>" >&2
+    exit 2
+fi
+
+CLANG=/home/user/src/clang-p2996/build/bin/clang++
+LIBCXX_INC_TGT=/home/user/src/clang-p2996/build/include/x86_64-unknown-linux-gnu/c++/v1
+LIBCXX_INC=/home/user/src/clang-p2996/build/include/c++/v1
+LIBCXX_LIB=/home/user/src/clang-p2996/build/lib/x86_64-unknown-linux-gnu
+
+SRC="$1"
+TMP_SRC="/tmp/cxx-src-$$.cpp"
+TMP_BIN="/tmp/cxx-out-$$"
+
+trap 'rm -f "$TMP_SRC" "$TMP_BIN"' EXIT
+
+# Copy + strip CRLF (Windows line endings on /mnt/c mounts).
+cp "$SRC" "$TMP_SRC"
+sed -i 's/\r$//' "$TMP_SRC"
+
+"$CLANG" \
+    -std=c++26 -freflection-latest -stdlib=libc++ -nostdinc++ \
+    -isystem "$LIBCXX_INC_TGT" \
+    -isystem "$LIBCXX_INC" \
+    -L "$LIBCXX_LIB" \
+    -Wl,-rpath,"$LIBCXX_LIB" \
+    -o "$TMP_BIN" "$TMP_SRC"
+
+"$TMP_BIN"
