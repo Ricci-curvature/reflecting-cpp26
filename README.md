@@ -82,6 +82,9 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 - **10** — [regex validation, naive per-call construction](https://github.com/Ricci-curvature/reflecting-cpp26/blob/1c35c6e/stages/10_regex_naive.cpp)
 - **11** — [regex function-local static cache (map + mutex)](https://github.com/Ricci-curvature/reflecting-cpp26/blob/2df52e4/stages/11_regex_static_cache.cpp)
 - **12** — [regex template-parameter cache via `std::meta::info` NTTP](https://github.com/Ricci-curvature/reflecting-cpp26/blob/df3f034/stages/12_regex_template_cache.cpp)
+- **13** — [`std::optional<T>` recursion + `NotNullopt`](https://github.com/Ricci-curvature/reflecting-cpp26/blob/48bc245/stages/13_optional_field.cpp)
+- **14** — [`std::vector<T>` recursion + `path_stack` variant](https://github.com/Ricci-curvature/reflecting-cpp26/blob/4cf6353/stages/14_vector_field.cpp)
+- **15** — [container-level `MinSize` / `MaxSize`](https://github.com/Ricci-curvature/reflecting-cpp26/blob/3a64156/stages/15_container_annotations.cpp)
 
 *Heads-up: pinned snapshots 1–7 predate the comment translation and still show the original Korean. Current state in [`755c15d`](https://github.com/Ricci-curvature/reflecting-cpp26/commit/755c15d) is English.*
 
@@ -99,4 +102,4 @@ This is a learning project, not a production library. The header-only core (`inc
 - Three entry-point policies (vector / expected / throw)
 - `CollectAll` and `FailFast` stop modes, driven by the context — not by the policy wrapper
 
-Stages 9–12 extend the experiment with a `Regex<N>` annotation and compare runtime vs compile-time caching strategies for `std::regex`. They're standalone `.cpp` files and not yet merged into the header-only library. Still out of scope: `std::vector`/`std::optional` fields, custom validator callables, runtime-loaded schemas — each is a separate post's worth of design.
+Stages 9–12 extend the experiment with a `Regex<N>` annotation and compare runtime vs compile-time caching strategies for `std::regex`. Stages 13–15 add `std::optional<T>` and `std::vector<T>` recursion on top of the aggregate walker, switch the path stack from a flat `vector<string>` to `vector<variant<string, size_t>>` so indices stay structurally distinct from field names, and introduce container-level `MinSize` / `MaxSize` annotations. All four stages are standalone `.cpp` files and not yet merged into the header-only library. Still out of scope: custom validator callables, runtime-loaded schemas — each is a separate post's worth of design.
