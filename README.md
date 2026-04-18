@@ -78,20 +78,25 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 - **06** — [nested structs](https://github.com/Ricci-curvature/reflecting-cpp26/blob/afe66a0/stages/06_nested_structs.cpp)
 - **07** — [policy layer](https://github.com/Ricci-curvature/reflecting-cpp26/blob/e98d973/stages/07_policy_layer.cpp)
 - **08** — [header-only](https://github.com/Ricci-curvature/reflecting-cpp26/blob/efde80c/stages/08_header_only.cpp)
+- **09** — [regex annotation, read-only](https://github.com/Ricci-curvature/reflecting-cpp26/blob/643d6ee/stages/09_regex_annotation_read.cpp)
+- **10** — [regex validation, naive per-call construction](https://github.com/Ricci-curvature/reflecting-cpp26/blob/1c35c6e/stages/10_regex_naive.cpp)
+- **11** — [regex function-local static cache (map + mutex)](https://github.com/Ricci-curvature/reflecting-cpp26/blob/2df52e4/stages/11_regex_static_cache.cpp)
+- **12** — [regex template-parameter cache via `std::meta::info` NTTP](https://github.com/Ricci-curvature/reflecting-cpp26/blob/df3f034/stages/12_regex_template_cache.cpp)
 
-*Heads-up: these pinned snapshots predate the comment translation — stages 1–7 still show the original Korean. Current state in [`755c15d`](https://github.com/Ricci-curvature/reflecting-cpp26/commit/755c15d) is English.*
+*Heads-up: pinned snapshots 1–7 predate the comment translation and still show the original Korean. Current state in [`755c15d`](https://github.com/Ricci-curvature/reflecting-cpp26/commit/755c15d) is English.*
 
-## Walkthrough
+## Walkthroughs
 
-[**A Declarative Validator in C++26**](https://riccilab.dev/blog/A-Declarative-Validator-in-C++26) walks all eight stages in order, with the errors that showed up along the way and the clang-p2996 quirks that shaped the final design.
+- [**A Declarative Validator in C++26**](https://riccilab.dev/blog/A-Declarative-Validator-in-C++26) walks stages 1–8, with the errors that showed up along the way and the clang-p2996 quirks that shaped the final design.
+- [**Caching Regex with C++26 Reflection**](https://riccilab.dev/blog/Caching-Regex-with-C++26-Reflection) covers stages 9–12: adding a `Regex<N>` annotation, measuring the naive rebuild cost, and comparing a function-local static cache against a template-parameter cache keyed on `std::meta::info` as an NTTP.
 
 ## Scope
 
-This is a learning project, not a production library. The v1 core covers:
+This is a learning project, not a production library. The header-only core (`include/validator.hpp`) covers:
 
 - Scalar and string fields with the four annotation types above
 - Recursion into aggregate (plain-struct) members, producing dotted error paths
 - Three entry-point policies (vector / expected / throw)
 - `CollectAll` and `FailFast` stop modes, driven by the context — not by the policy wrapper
 
-Deliberately out of scope for v1: `Regex`, `std::vector`/`std::optional` fields, custom validator callables, runtime-loaded schemas. Each of those is a separate post's worth of design.
+Stages 9–12 extend the experiment with a `Regex<N>` annotation and compare runtime vs compile-time caching strategies for `std::regex`. They're standalone `.cpp` files and not yet merged into the header-only library. Still out of scope: `std::vector`/`std::optional` fields, custom validator callables, runtime-loaded schemas — each is a separate post's worth of design.
