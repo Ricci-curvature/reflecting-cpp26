@@ -16,6 +16,12 @@
 //   - Policy functions : collect(obj, mode)  → std::vector<ValidationError>
 //                        check(obj, mode)    → std::expected<void, vector<ValidationError>>
 //                        validate(obj, mode) → void, throws ValidationException on failure
+//   - Compile-time     : passes(obj)         → constexpr bool
+//                        first_error(obj)    → constexpr std::string, "" if valid
+//                        Meant for `static_assert(passes(obj), first_error(obj))`.
+//                        Annotation messages are built with std::to_chars (C++23
+//                        constexpr per P2291) so they survive the compile-time
+//                        path; byte-identical to std::format's runtime output.
 //   - Helper           : format_error(err)   → "<path>: <message> (<annotation>)"
 //
 // Internal (namespace av::detail, not stable, not user-facing):
@@ -37,6 +43,7 @@
 #include <string>
 #include <vector>
 #include <format>
+#include <charconv>
 #include <cstddef>
 #include <type_traits>
 #include <expected>
@@ -90,6 +97,24 @@ struct is_vector<std::vector<T>> : std::true_type {};
 template <typename T>
 constexpr bool is_vector_v = is_vector<T>::value;
 
+// Mini integral-to-string formatter.
+//
+// std::format is not yet constexpr in this libc++ build, so annotation
+// messages and path rendering use std::to_chars (constexpr since C++23,
+// P2291) + string concat. Output is byte-identical to the std::format
+// equivalents these calls replace.
+constexpr std::string to_str(long long x) {
+    char buf[24];
+    auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), x);
+    return std::string(buf, ptr);
+}
+
+constexpr std::string to_str(std::size_t x) {
+    char buf[24];
+    auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), x);
+    return std::string(buf, ptr);
+}
+
 using PathSegment = std::variant<std::string, std::size_t>;
 
 struct ValidationContext {
@@ -97,15 +122,17 @@ struct ValidationContext {
     std::vector<PathSegment> path_stack;
     Mode mode = Mode::CollectAll;
 
-    bool should_stop() const {
+    constexpr bool should_stop() const {
         return mode == Mode::FailFast && !errors.empty();
     }
 
-    std::string current_path() const {
+    constexpr std::string current_path() const {
         std::string r;
         for (const auto& seg : path_stack) {
             if (std::holds_alternative<std::size_t>(seg)) {
-                r += std::format("[{}]", std::get<std::size_t>(seg));
+                r += '[';
+                r += to_str(std::get<std::size_t>(seg));
+                r += ']';
             } else {
                 const auto& name = std::get<std::string>(seg);
                 if (!r.empty()) r += '.';
@@ -117,10 +144,10 @@ struct ValidationContext {
 };
 
 template <typename T>
-void walk_members(const T& obj, ValidationContext& ctx);
+constexpr void walk_members(const T& obj, ValidationContext& ctx);
 
 template <std::meta::info Member, typename V>
-void dispatch_value(const V& v, ValidationContext& ctx) {
+constexpr void dispatch_value(const V& v, ValidationContext& ctx) {
     template for (constexpr auto ann :
                   std::define_static_array(
                       std::meta::annotations_of(Member)))
@@ -153,7 +180,7 @@ void dispatch_value(const V& v, ValidationContext& ctx) {
 }
 
 template <typename T>
-void walk_members(const T& obj, ValidationContext& ctx) {
+constexpr void walk_members(const T& obj, ValidationContext& ctx) {
     template for (constexpr auto member :
                   std::define_static_array(
                       std::meta::nonstatic_data_members_of(
@@ -191,9 +218,16 @@ struct Range {
                    && !detail::is_optional_v<V>
                    && !detail::is_vector_v<V>) {
             if (v < min || v > max) {
+                std::string msg;
+                msg += "must be in [";
+                msg += detail::to_str(min);
+                msg += ", ";
+                msg += detail::to_str(max);
+                msg += "], got ";
+                msg += detail::to_str(static_cast<long long>(v));
                 ctx.errors.push_back({
                     ctx.current_path(),
-                    std::format("must be in [{}, {}], got {}", min, max, v),
+                    std::move(msg),
                     "Range"
                 });
             }
@@ -211,9 +245,14 @@ struct MinLength {
                    && !detail::is_optional_v<V>
                    && !detail::is_vector_v<V>) {
             if (v.size() < value) {
+                std::string msg;
+                msg += "length must be >= ";
+                msg += detail::to_str(value);
+                msg += ", got ";
+                msg += detail::to_str(v.size());
                 ctx.errors.push_back({
                     ctx.current_path(),
-                    std::format("length must be >= {}, got {}", value, v.size()),
+                    std::move(msg),
                     "MinLength"
                 });
             }
@@ -231,9 +270,14 @@ struct MaxLength {
                    && !detail::is_optional_v<V>
                    && !detail::is_vector_v<V>) {
             if (v.size() > value) {
+                std::string msg;
+                msg += "length must be <= ";
+                msg += detail::to_str(value);
+                msg += ", got ";
+                msg += detail::to_str(v.size());
                 ctx.errors.push_back({
                     ctx.current_path(),
-                    std::format("length must be <= {}, got {}", value, v.size()),
+                    std::move(msg),
                     "MaxLength"
                 });
             }
@@ -265,9 +309,14 @@ struct MinSize {
     constexpr void validate(const V& v, Ctx& ctx) const {
         if constexpr (detail::is_vector_v<V>) {
             if (v.size() < value) {
+                std::string msg;
+                msg += "size must be >= ";
+                msg += detail::to_str(value);
+                msg += ", got ";
+                msg += detail::to_str(v.size());
                 ctx.errors.push_back({
                     ctx.current_path(),
-                    std::format("size must be >= {}, got {}", value, v.size()),
+                    std::move(msg),
                     "MinSize"
                 });
             }
@@ -283,9 +332,14 @@ struct MaxSize {
     constexpr void validate(const V& v, Ctx& ctx) const {
         if constexpr (detail::is_vector_v<V>) {
             if (v.size() > value) {
+                std::string msg;
+                msg += "size must be <= ";
+                msg += detail::to_str(value);
+                msg += ", got ";
+                msg += detail::to_str(v.size());
                 ctx.errors.push_back({
                     ctx.current_path(),
-                    std::format("size must be <= {}, got {}", value, v.size()),
+                    std::move(msg),
                     "MaxSize"
                 });
             }
@@ -363,6 +417,48 @@ void validate(const T& obj, Mode mode = Mode::CollectAll) {
 
 inline std::string format_error(const ValidationError& e) {
     return std::format("{}: {} ({})", e.path, e.message, e.annotation);
+}
+
+// ---- Compile-time entry points ----
+//
+// passes(obj)      → true iff no annotation rejected any member.
+// first_error(obj) → "<path>: <message> (<annotation>)" for the first
+//                    collected error, empty string if none.
+//
+// Intended use:
+//     static_assert(av::passes(obj), av::first_error(obj));
+//
+// Both are also callable at runtime. Messages are byte-identical to the
+// runtime walker's — see detail::to_str above for how that holds without
+// std::format.
+//
+// Constraint to be aware of: namespace-scope `constexpr T obj{...};` works
+// only for types whose members have no transient heap past their
+// initializer (e.g. short SSO strings). For types containing
+// `std::vector`, construct inside a `consteval` helper and call
+// passes/first_error there.
+
+template <typename T>
+constexpr bool passes(const T& obj) {
+    detail::ValidationContext ctx;
+    detail::walk_members(obj, ctx);
+    return ctx.errors.empty();
+}
+
+template <typename T>
+constexpr std::string first_error(const T& obj) {
+    detail::ValidationContext ctx;
+    detail::walk_members(obj, ctx);
+    if (ctx.errors.empty()) return {};
+    const auto& e = ctx.errors.front();
+    std::string r;
+    r += e.path;
+    r += ": ";
+    r += e.message;
+    r += " (";
+    r += e.annotation;
+    r += ")";
+    return r;
 }
 
 }  // namespace av
