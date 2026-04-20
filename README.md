@@ -87,6 +87,7 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 - **15** — [container-level `MinSize` / `MaxSize`](https://github.com/Ricci-curvature/reflecting-cpp26/blob/3a64156/stages/15_container_annotations.cpp)
 - **16** — [custom predicate annotations via `Predicate<F>` wrapper](https://github.com/Ricci-curvature/reflecting-cpp26/blob/02cc12c/stages/16_custom_predicates.cpp)
 - **17** — [dispatch refactor: annotation ladder travels through wrappers](https://github.com/Ricci-curvature/reflecting-cpp26/blob/9d44e99/stages/17_dispatch_refactor.cpp)
+- **18** — [validator protocol: annotation carries its own `validate()`](https://github.com/Ricci-curvature/reflecting-cpp26/blob/d952c2b/stages/18_validator_protocol.cpp)
 
 *Heads-up: pinned snapshots 1–7 predate the comment translation and still show the original Korean. Current state in [`755c15d`](https://github.com/Ricci-curvature/reflecting-cpp26/commit/755c15d) is English.*
 
@@ -97,6 +98,7 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 - [**Validating Containers with C++26 Reflection**](https://riccilab.dev/blog/Validating-Containers-with-C++26-Reflection) covers stages 13–15: extending the walker past `is_aggregate_v` to recurse into `std::optional<T>` and `std::vector<T>`, switching the path stack to `std::variant<std::string, std::size_t>` so indices render as `[N]`, and adding container-level `MinSize` / `MaxSize` annotations.
 - [**Opening a Closed Annotation Set with Structural Lambdas**](https://riccilab.dev/blog/Opening-a-Closed-Annotation-Set-with-Structural-Lambdas) covers stage 16: opening the closed-set dispatch with one `Predicate<F>` wrapper branch, confirming captureless lambda closures work as structural NTTPs, isolating the structural-type rule that rejects capturing closures, and contrasting per-site closure-type identity against stage 12's value-NTTP fold.
 - [**One Refactor, Three Payoffs**](https://riccilab.dev/blog/One-Refactor-Three-Payoffs) covers stage 17: splitting the walker into `walk_members<T>` and `dispatch_value<Member, V>` so the annotation ladder runs against the value in hand at every level. The refactor un-skips stage 13's `optional<Scalar>+Range` and stage 14's `vector<Scalar>+Range` without new syntax, composes `vector<optional<Aggregate>>` walks out of the same dispatch, and turns two `Predicate` annotations with different callable signatures into container-level vs element-level checks on the same field.
+- [**Annotation IS the Validator**](https://riccilab.dev/blog/Annotation-IS-the-Validator) covers stage 18: collapsing the six-branch annotation ladder into a single protocol probe. Every annotation — `Range`, `MinLength`, `Predicate`, and anything the user writes — carries its own `validate(v, ctx)` member, and the walker calls it through a `requires { a.validate(v, ctx); }` guard and knows nothing else. `Predicate` gains a `char[N]` message field with CTAD deduction guides for default vs custom literals, and user-defined annotations ride the same wrapper-piercing recursion as the built-ins — a plain struct with a `validate()` member is all it takes.
 
 ## Scope
 
