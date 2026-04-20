@@ -49,11 +49,24 @@ Everything lives under `namespace av`:
 | `collect(obj, mode)` | Returns `std::vector<ValidationError>` |
 | `check(obj, mode)` | Returns `std::expected<void, std::vector<ValidationError>>` |
 | `validate(obj, mode)` | Returns `void`; throws `ValidationException` on failure |
+| `passes(obj)` | `constexpr bool` — true iff no annotation rejected. Usable at compile time |
+| `first_error(obj)` | `constexpr std::string` — `"<path>: <message> (<annotation>)"` for the first error, empty string if none |
 | `format_error(err)` | Renders `"<path>: <message> (<annotation>)"` |
 
 Every annotation in the table is protocol-based — it owns a `constexpr template <V, Ctx> void validate(const V&, Ctx&)` member, and the walker calls into it through a `requires { a.validate(v, ctx); }` guard. That means user code can introduce its own annotations the same way: write a plain struct with a `validate()` member and attach it with `[[=MyAnnotation{}]]`. The library header does not need to change.
 
-`av::detail::` holds the internals (`ValidationContext`, `walk_members`, `dispatch_value`, the `is_optional_v` / `is_vector_v` traits). Not user-facing, not API-stable.
+`passes` and `first_error` are the compile-time entry points. They're `constexpr`, so they work at both consteval and runtime:
+
+```cpp
+constexpr User alice{.age = 30, .name = std::string{"Alice"},
+                     .address = Address{.street = std::string{"Main St"},
+                                        .zip_code = 12345}};
+static_assert(av::passes(alice), av::first_error(alice));
+```
+
+A failing assertion surfaces the full computed message in the diagnostic (P2741), for instance `error: static assertion failed: age: must be in [0, 150], got 200 (Range)`. Namespace-scope `constexpr` works for types whose members have no transient heap past their initializer (e.g. short SSO strings); for types containing `std::vector<T>` construct inside a `consteval` helper and call `passes` / `first_error` there.
+
+`av::detail::` holds the internals (`ValidationContext`, `walk_members`, `dispatch_value`, the `is_optional_v` / `is_vector_v` traits, a `to_str` mini-formatter that replaces `std::format` at consteval). Not user-facing, not API-stable.
 
 ## Requirements
 
@@ -74,9 +87,14 @@ clang++ -std=c++26 -freflection-latest -stdlib=libc++ \
     -I include -o tests/protocol_smoke_test.out tests/protocol_smoke_test.cpp
 ./tests/protocol_smoke_test.out
 # protocol smoke test: OK
+
+clang++ -std=c++26 -freflection-latest -stdlib=libc++ \
+    -I include -o tests/constexpr_smoke_test.out tests/constexpr_smoke_test.cpp
+./tests/constexpr_smoke_test.out
+# constexpr smoke test: OK
 ```
 
-`smoke_test.cpp` covers the Stage 8 public surface (scalar/string annotations, aggregate recursion, the three entry-point policies, `FailFast`). `protocol_smoke_test.cpp` covers the Stage 18 additions exercised through the same header: `std::optional<T>` / `std::vector<T>` wrapper recursion with indexed paths, `MinSize` / `MaxSize` / `NotNullopt`, `Predicate` with default and custom messages, and a user-defined protocol annotation picked up by the walker without any library change.
+`smoke_test.cpp` covers the Stage 8 public surface (scalar/string annotations, aggregate recursion, the three entry-point policies, `FailFast`). `protocol_smoke_test.cpp` covers the Stage 18 additions exercised through the same header: `std::optional<T>` / `std::vector<T>` wrapper recursion with indexed paths, `MinSize` / `MaxSize` / `NotNullopt`, `Predicate` with default and custom messages, and a user-defined protocol annotation picked up by the walker without any library change. `constexpr_smoke_test.cpp` covers Stage 19: `static_assert(av::passes(obj), av::first_error(obj))` on literal structs — both directly at namespace scope and through a `consteval` helper for `std::vector`-containing types — with the exact failure messages pinned at compile time against the same string the runtime walker produces.
 
 ## Stages
 
@@ -100,6 +118,7 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 - **16** — [custom predicate annotations via `Predicate<F>` wrapper](https://github.com/Ricci-curvature/reflecting-cpp26/blob/02cc12c/stages/16_custom_predicates.cpp)
 - **17** — [dispatch refactor: annotation ladder travels through wrappers](https://github.com/Ricci-curvature/reflecting-cpp26/blob/9d44e99/stages/17_dispatch_refactor.cpp)
 - **18** — [validator protocol: annotation carries its own `validate()`](https://github.com/Ricci-curvature/reflecting-cpp26/blob/d952c2b/stages/18_validator_protocol.cpp)
+- **19** — [constexpr validation: `static_assert` reads the error](https://github.com/Ricci-curvature/reflecting-cpp26/blob/fd89528/stages/19_constexpr_validation.cpp)
 
 *Heads-up: pinned snapshots 1–7 predate the comment translation and still show the original Korean. Current state in [`755c15d`](https://github.com/Ricci-curvature/reflecting-cpp26/commit/755c15d) is English.*
 
@@ -120,7 +139,8 @@ This is a learning project, not a production library. The header-only core (`inc
 - Scalar, string, `std::optional<T>`, and `std::vector<T>` fields with a set of protocol-based annotations (`Range`, `MinLength`, `MaxLength`, `NotEmpty`, `MinSize`, `MaxSize`, `NotNullopt`, `Predicate<F, N>`)
 - Recursion into aggregate (plain-struct) members, producing dotted error paths with `[N]` for container indices (`users[2].address.zip_code`)
 - User-defined annotations through the same protocol — any struct with a `constexpr template <V, Ctx> void validate(const V&, Ctx&)` member rides the same dispatch
-- Three entry-point policies (vector / expected / throw)
+- Three runtime entry-point policies (vector / expected / throw)
+- Two compile-time entry points (`passes` / `first_error`) for `static_assert` on literal structs, with P2741 user-defined assertion messages surfacing the full error string in the diagnostic
 - `CollectAll` and `FailFast` stop modes, driven by the context — not by the policy wrapper
 
 Stages 9–12 extend the experiment with a `Regex<N>` annotation and compare runtime vs compile-time caching strategies for `std::regex`. Those stages are standalone `.cpp` files and not yet merged into the header-only library. Still out of scope: runtime-loaded schemas, annotation-driven serialization — each is a separate post's worth of design.
