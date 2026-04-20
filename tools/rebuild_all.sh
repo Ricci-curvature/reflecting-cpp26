@@ -14,9 +14,11 @@ FLAGS=(-std=c++26 -freflection-latest -stdlib=libc++ -nostdinc++
 
 for src in \
     stages/19_constexpr_validation.cpp \
+    stages/20_json_schema_export.cpp \
     tests/smoke_test.cpp \
     tests/protocol_smoke_test.cpp \
     tests/constexpr_smoke_test.cpp \
+    tests/json_schema_smoke_test.cpp \
     tests/readme_example.cpp
 do
     echo "=== $src ==="

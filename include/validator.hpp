@@ -22,6 +22,18 @@
 //                        Annotation messages are built with std::to_chars (C++23
 //                        constexpr per P2291) so they survive the compile-time
 //                        path; byte-identical to std::format's runtime output.
+//   - JSON Schema      : json_schema<T>()    → constexpr std::string
+//                        Projects a struct's reflected members + annotations
+//                        into a JSON Schema document. Uses the same
+//                        annotation-is-the-protocol shape as `validate()`:
+//                        each annotation owns a
+//                          template<typename V>
+//                          constexpr void schema_emit(SchemaContext&) const;
+//                        that pushes per-member fragments (e.g. `"minimum":0`)
+//                        or flips the `required` flag (NotNullopt). The walker
+//                        never dispatches on annotation identity; it asks
+//                        `requires { a.template schema_emit<V>(sc); }` and calls
+//                        through, mirroring Stage 18's validate() protocol.
 //   - Helper           : format_error(err)   → "<path>: <message> (<annotation>)"
 //
 // Internal (namespace av::detail, not stable, not user-facing):
@@ -114,6 +126,17 @@ constexpr std::string to_str(std::size_t x) {
     auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), x);
     return std::string(buf, ptr);
 }
+
+// SchemaContext: the parallel of ValidationContext for JSON Schema
+// emission. Annotations push JSON key/value fragments (bodies only,
+// e.g. `"minimum":0`) into `fragments`, and flip `required` if they
+// mean "this member must be present" (NotNullopt). The outer emitter
+// wraps fragments in `{...}` for the member and lifts `required`
+// upward into the parent object's `"required":[...]` list.
+struct SchemaContext {
+    std::vector<std::string> fragments;
+    bool required = false;
+};
 
 using PathSegment = std::variant<std::string, std::size_t>;
 
@@ -233,6 +256,22 @@ struct Range {
             }
         }
     }
+
+    // Schema: arithmetic field → "minimum":lo,"maximum":hi.
+    // bool is excluded (JSON Schema bool has no numeric bounds).
+    template <typename V>
+    constexpr void schema_emit(detail::SchemaContext& sc) const {
+        if constexpr (std::is_arithmetic_v<V> && !std::is_same_v<V, bool>) {
+            std::string mn;
+            mn += "\"minimum\":";
+            mn += detail::to_str(min);
+            sc.fragments.push_back(std::move(mn));
+            std::string mx;
+            mx += "\"maximum\":";
+            mx += detail::to_str(max);
+            sc.fragments.push_back(std::move(mx));
+        }
+    }
 };
 
 struct MinLength {
@@ -256,6 +295,17 @@ struct MinLength {
                     "MinLength"
                 });
             }
+        }
+    }
+
+    // Schema: only meaningful for string — "minLength":N.
+    template <typename V>
+    constexpr void schema_emit(detail::SchemaContext& sc) const {
+        if constexpr (std::is_same_v<V, std::string>) {
+            std::string f;
+            f += "\"minLength\":";
+            f += detail::to_str(value);
+            sc.fragments.push_back(std::move(f));
         }
     }
 };
@@ -283,6 +333,17 @@ struct MaxLength {
             }
         }
     }
+
+    // Schema: only meaningful for string — "maxLength":N.
+    template <typename V>
+    constexpr void schema_emit(detail::SchemaContext& sc) const {
+        if constexpr (std::is_same_v<V, std::string>) {
+            std::string f;
+            f += "\"maxLength\":";
+            f += detail::to_str(value);
+            sc.fragments.push_back(std::move(f));
+        }
+    }
 };
 
 struct NotEmpty {
@@ -297,6 +358,16 @@ struct NotEmpty {
                     "NotEmpty"
                 });
             }
+        }
+    }
+
+    // Schema: string → "minLength":1; vector → "minItems":1.
+    template <typename V>
+    constexpr void schema_emit(detail::SchemaContext& sc) const {
+        if constexpr (std::is_same_v<V, std::string>) {
+            sc.fragments.push_back(std::string{"\"minLength\":1"});
+        } else if constexpr (detail::is_vector_v<V>) {
+            sc.fragments.push_back(std::string{"\"minItems\":1"});
         }
     }
 };
@@ -322,6 +393,17 @@ struct MinSize {
             }
         }
     }
+
+    // Schema: vector → "minItems":N.
+    template <typename V>
+    constexpr void schema_emit(detail::SchemaContext& sc) const {
+        if constexpr (detail::is_vector_v<V>) {
+            std::string f;
+            f += "\"minItems\":";
+            f += detail::to_str(value);
+            sc.fragments.push_back(std::move(f));
+        }
+    }
 };
 
 struct MaxSize {
@@ -345,6 +427,17 @@ struct MaxSize {
             }
         }
     }
+
+    // Schema: vector → "maxItems":N.
+    template <typename V>
+    constexpr void schema_emit(detail::SchemaContext& sc) const {
+        if constexpr (detail::is_vector_v<V>) {
+            std::string f;
+            f += "\"maxItems\":";
+            f += detail::to_str(value);
+            sc.fragments.push_back(std::move(f));
+        }
+    }
 };
 
 struct NotNullopt {
@@ -359,6 +452,14 @@ struct NotNullopt {
                 });
             }
         }
+    }
+
+    // Schema: cross-cutting — flips the member's `required` flag, which
+    // the parent's emitter lifts into its `"required":[...]` list.
+    // Contributes nothing to the member's own fragment.
+    template <typename V>
+    constexpr void schema_emit(detail::SchemaContext& sc) const {
+        sc.required = true;
     }
 };
 
@@ -382,6 +483,19 @@ struct Predicate {
                 });
             }
         }
+    }
+
+    // Schema: an arbitrary callable isn't expressible in JSON Schema, so
+    // we emit "$comment":"predicate: <message>" as a honest marker. Tools
+    // that consume this schema see the constraint exists without being
+    // able to enforce it.
+    template <typename V>
+    constexpr void schema_emit(detail::SchemaContext& sc) const {
+        std::string f;
+        f += "\"$comment\":\"predicate: ";
+        f += std::string{message};
+        f += '"';
+        sc.fragments.push_back(std::move(f));
     }
 };
 
@@ -459,6 +573,194 @@ constexpr std::string first_error(const T& obj) {
     r += e.annotation;
     r += ")";
     return r;
+}
+
+// ---- JSON Schema export ----
+//
+// `json_schema<T>()` walks the same reflection surface as `passes` /
+// `first_error`, but invokes each annotation's `schema_emit<V>()`
+// instead of `validate(v, ctx)`. Same members, same annotations,
+// different projection.
+//
+// The output is a JSON Schema document. `{"type":"object","properties":{...}}`
+// for aggregates; nested aggregates recurse; `std::optional<U>` unwraps
+// to U; `std::vector<U>` emits `"type":"array","items":<U's schema>`.
+// NotNullopt is structural — it flips the member's required flag,
+// which the parent emitter lifts into its `"required":[...]`.
+//
+// No whitespace, no `"$schema"` header — just the minimal shape needed
+// to pin with `static_assert(json_schema<T>() == R"(...)")`.
+// Callers that need pretty-printing or draft URIs can wrap the output.
+
+namespace detail {
+
+// effective_t<V>: peel one layer of std::optional. JSON Schema has no
+// "nullable" in draft-07 core, so optional<U> is emitted as U and the
+// member's presence is governed by whether NotNullopt was attached.
+template <typename V>
+struct effective { using type = V; };
+template <typename U>
+struct effective<std::optional<U>> { using type = U; };
+template <typename V>
+using effective_t = typename effective<V>::type;
+
+// emit_type_keyword<V>: the leading `"type":"..."` for a value type.
+// Returns empty string for aggregate/unknown (caller decides the shape).
+template <typename V>
+constexpr std::string emit_type_keyword() {
+    if constexpr (std::is_same_v<V, bool>) {
+        return std::string{"\"type\":\"boolean\""};
+    } else if constexpr (std::is_integral_v<V>) {
+        return std::string{"\"type\":\"integer\""};
+    } else if constexpr (std::is_floating_point_v<V>) {
+        return std::string{"\"type\":\"number\""};
+    } else if constexpr (std::is_same_v<V, std::string>) {
+        return std::string{"\"type\":\"string\""};
+    } else if constexpr (is_vector_v<V>) {
+        return std::string{"\"type\":\"array\""};
+    } else {
+        return std::string{};
+    }
+}
+
+template <typename T>
+constexpr std::string emit_object_schema();
+
+// emit_leaf_schema<V>: for a non-aggregate value type (with no
+// annotations available), produce `{"type":"..."}`. Used for
+// vector `items` where the element type doesn't carry annotations.
+template <typename V>
+constexpr std::string emit_leaf_schema() {
+    if constexpr (std::is_aggregate_v<V> && !std::is_same_v<V, std::string>
+                  && !is_vector_v<V> && !is_optional_v<V>) {
+        return emit_object_schema<V>();
+    } else if constexpr (is_vector_v<V>) {
+        std::string r;
+        r += "{\"type\":\"array\",\"items\":";
+        r += emit_leaf_schema<typename V::value_type>();
+        r += '}';
+        return r;
+    } else if constexpr (is_optional_v<V>) {
+        return emit_leaf_schema<typename V::value_type>();
+    } else {
+        std::string r;
+        r += '{';
+        r += emit_type_keyword<V>();
+        r += '}';
+        return r;
+    }
+}
+
+// emit_member_schema<Member, V>: emit `{...}` for one data member and
+// return the `required` flag for the parent to lift. Handles
+// optional unwrap, nested aggregates (recurses into emit_object_schema),
+// vectors (emits `"items"`), and overlays per-annotation fragments.
+template <std::meta::info Member, typename V>
+constexpr std::pair<std::string, bool> emit_member_schema() {
+    using E = effective_t<V>;
+
+    // Collect annotation contributions.
+    SchemaContext sc;
+    template for (constexpr auto ann :
+                  std::define_static_array(
+                      std::meta::annotations_of(Member)))
+    {
+        using A = [:std::meta::type_of(ann):];
+        constexpr auto a = std::meta::extract<A>(ann);
+        if constexpr (requires { a.template schema_emit<E>(sc); }) {
+            a.template schema_emit<E>(sc);
+        }
+    }
+
+    // Nested aggregate member: delegate to emit_object_schema, then
+    // annotations are only consulted for the `required` flag (object-level
+    // annotation keywords are out of scope for this stage).
+    if constexpr (std::is_aggregate_v<E>
+                  && !std::is_same_v<E, std::string>
+                  && !is_vector_v<E>
+                  && !is_optional_v<E>) {
+        return {emit_object_schema<E>(), sc.required};
+    }
+
+    // Scalar / string / vector: compose `{"type":"...", <frags>, <items>?}`.
+    std::string r;
+    r += '{';
+    const std::string type_kw = emit_type_keyword<E>();
+    bool need_comma = false;
+    if (!type_kw.empty()) {
+        r += type_kw;
+        need_comma = true;
+    }
+    for (const auto& frag : sc.fragments) {
+        if (need_comma) r += ',';
+        r += frag;
+        need_comma = true;
+    }
+    if constexpr (is_vector_v<E>) {
+        if (need_comma) r += ',';
+        r += "\"items\":";
+        r += emit_leaf_schema<typename E::value_type>();
+    }
+    r += '}';
+    return {r, sc.required};
+}
+
+template <typename T>
+constexpr std::string emit_object_schema() {
+    std::string props;
+    std::string required_list;
+    bool props_first = true;
+    bool req_first = true;
+
+    template for (constexpr auto member :
+                  std::define_static_array(
+                      std::meta::nonstatic_data_members_of(
+                          ^^T, std::meta::access_context::unchecked())))
+    {
+        using V = [:std::meta::type_of(member):];
+        constexpr auto name_view = std::meta::identifier_of(member);
+
+        auto [member_schema, required] = emit_member_schema<member, V>();
+
+        if (!props_first) props += ',';
+        props += '"';
+        props += std::string{name_view};
+        props += "\":";
+        props += member_schema;
+        props_first = false;
+
+        if (required) {
+            if (!req_first) required_list += ',';
+            required_list += '"';
+            required_list += std::string{name_view};
+            required_list += '"';
+            req_first = false;
+        }
+    }
+
+    std::string r;
+    r += "{\"type\":\"object\",\"properties\":{";
+    r += props;
+    r += '}';
+    if (!required_list.empty()) {
+        r += ",\"required\":[";
+        r += required_list;
+        r += ']';
+    }
+    r += '}';
+    return r;
+}
+
+}  // namespace detail
+
+template <typename T>
+constexpr std::string json_schema() {
+    if constexpr (std::is_aggregate_v<T> && !std::is_same_v<T, std::string>
+                  && !detail::is_vector_v<T> && !detail::is_optional_v<T>) {
+        return detail::emit_object_schema<T>();
+    } else {
+        return detail::emit_leaf_schema<T>();
+    }
 }
 
 }  // namespace av
