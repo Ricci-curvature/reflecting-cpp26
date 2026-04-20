@@ -39,7 +39,10 @@ Everything lives under `namespace av`:
 
 | Symbol | Role |
 |---|---|
-| `Range`, `MinLength`, `MaxLength`, `NotEmpty` | Annotation types attached with `[[=...]]` |
+| `Range`, `MinLength`, `MaxLength`, `NotEmpty` | Scalar/string annotations attached with `[[=...]]` |
+| `MinSize`, `MaxSize` | Container-size bounds for `std::vector<T>` fields |
+| `NotNullopt` | Asserts a `std::optional<T>` field has a value |
+| `Predicate<F, N>` | User-callable annotation: captureless lambda + `char[N]` message. CTAD: `Predicate{f}` for the default message, `Predicate{f, "..."}` for a custom literal |
 | `ValidationError` | `{ path, message, annotation }` |
 | `ValidationException` | Thrown by `validate`, carries `std::vector<ValidationError>` |
 | `Mode::CollectAll` / `Mode::FailFast` | Stop-policy passed to the three entry points |
@@ -48,7 +51,9 @@ Everything lives under `namespace av`:
 | `validate(obj, mode)` | Returns `void`; throws `ValidationException` on failure |
 | `format_error(err)` | Renders `"<path>: <message> (<annotation>)"` |
 
-`av::detail::` holds the internals (`ValidationContext`, `validate_impl`). Not user-facing, not API-stable.
+Every annotation in the table is protocol-based — it owns a `constexpr template <V, Ctx> void validate(const V&, Ctx&)` member, and the walker calls into it through a `requires { a.validate(v, ctx); }` guard. That means user code can introduce its own annotations the same way: write a plain struct with a `validate()` member and attach it with `[[=MyAnnotation{}]]`. The library header does not need to change.
+
+`av::detail::` holds the internals (`ValidationContext`, `walk_members`, `dispatch_value`, the `is_optional_v` / `is_vector_v` traits). Not user-facing, not API-stable.
 
 ## Requirements
 
@@ -64,7 +69,14 @@ clang++ -std=c++26 -freflection-latest -stdlib=libc++ \
     -I include -o tests/smoke_test.out tests/smoke_test.cpp
 ./tests/smoke_test.out
 # smoke test: OK
+
+clang++ -std=c++26 -freflection-latest -stdlib=libc++ \
+    -I include -o tests/protocol_smoke_test.out tests/protocol_smoke_test.cpp
+./tests/protocol_smoke_test.out
+# protocol smoke test: OK
 ```
+
+`smoke_test.cpp` covers the Stage 8 public surface (scalar/string annotations, aggregate recursion, the three entry-point policies, `FailFast`). `protocol_smoke_test.cpp` covers the Stage 18 additions exercised through the same header: `std::optional<T>` / `std::vector<T>` wrapper recursion with indexed paths, `MinSize` / `MaxSize` / `NotNullopt`, `Predicate` with default and custom messages, and a user-defined protocol annotation picked up by the walker without any library change.
 
 ## Stages
 
@@ -104,9 +116,10 @@ The repo is organised as a staged build log. Every stage is a single self-contai
 
 This is a learning project, not a production library. The header-only core (`include/validator.hpp`) covers:
 
-- Scalar and string fields with the four annotation types above
-- Recursion into aggregate (plain-struct) members, producing dotted error paths
+- Scalar, string, `std::optional<T>`, and `std::vector<T>` fields with a set of protocol-based annotations (`Range`, `MinLength`, `MaxLength`, `NotEmpty`, `MinSize`, `MaxSize`, `NotNullopt`, `Predicate<F, N>`)
+- Recursion into aggregate (plain-struct) members, producing dotted error paths with `[N]` for container indices (`users[2].address.zip_code`)
+- User-defined annotations through the same protocol — any struct with a `constexpr template <V, Ctx> void validate(const V&, Ctx&)` member rides the same dispatch
 - Three entry-point policies (vector / expected / throw)
 - `CollectAll` and `FailFast` stop modes, driven by the context — not by the policy wrapper
 
-Stages 9–12 extend the experiment with a `Regex<N>` annotation and compare runtime vs compile-time caching strategies for `std::regex`. Stages 13–15 add `std::optional<T>` and `std::vector<T>` recursion on top of the aggregate walker, switch the path stack from a flat `vector<string>` to `vector<variant<string, size_t>>` so indices stay structurally distinct from field names, and introduce container-level `MinSize` / `MaxSize` annotations. All four stages are standalone `.cpp` files and not yet merged into the header-only library. Still out of scope: custom validator callables, runtime-loaded schemas — each is a separate post's worth of design.
+Stages 9–12 extend the experiment with a `Regex<N>` annotation and compare runtime vs compile-time caching strategies for `std::regex`. Those stages are standalone `.cpp` files and not yet merged into the header-only library. Still out of scope: runtime-loaded schemas, annotation-driven serialization — each is a separate post's worth of design.
